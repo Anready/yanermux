@@ -16,6 +16,8 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
+import com.termux.terminal.JNI;
 
 /**
  * A terminal session, consisting of a process coupled to a terminal interface.
@@ -175,9 +177,27 @@ public final class TerminalSession extends TerminalOutput {
 
     /** Write data to the shell process. */
     @Override
+    @Override
     public void write(byte[] data, int offset, int count) {
-        if (mShellPid > 0) mTerminalToProcessIOQueue.write(data, offset, count);
+        if (mShellPid > 0) {
+            String input = new String(data, offset, count).trim();
+
+        // Перехват команды
+            if (input.equalsIgnoreCase("launch Starbucks")) {
+            // Вывести сообщение в терминал
+                try {
+                    mProcessToTerminalIOQueue.write(("Launching Starbucks app...\n").getBytes(), 0, "Launching Starbucks app...\n".length());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                return; // Не отправляем команду в оболочку
+            }
+
+        // Отправляем команды в процесс
+            mTerminalToProcessIOQueue.write(data, offset, count);
+        }
     }
+
 
     /** Write the Unicode code point to the terminal encoded in UTF-8. */
     public void writeCodePoint(boolean prependEscape, int codePoint) {

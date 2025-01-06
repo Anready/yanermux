@@ -32,6 +32,8 @@ import com.termux.terminal.JNI;
  */
 public final class TerminalSession extends TerminalOutput {
 
+    private StringBuilder commandBuffer = new StringBuilder();
+
     private static final int MSG_NEW_INPUT = 1;
     private static final int MSG_PROCESS_EXITED = 4;
 
@@ -43,7 +45,7 @@ public final class TerminalSession extends TerminalOutput {
      * A queue written to from a separate thread when the process outputs, and read by main thread to process by
      * terminal emulator.
      */
-    final ByteQueue mProcessToTerminalIOQueue = new ByteQueue(4096);
+    ByteQueue mProcessToTerminalIOQueue = new ByteQueue(4096);
     /**
      * A queue written to from the main thread due to user interaction, and read by another thread which forwards by
      * writing to the {@link #mTerminalFileDescriptor}.
@@ -177,23 +179,32 @@ public final class TerminalSession extends TerminalOutput {
 
     /** Write data to the shell process. */
     @Override
-    @Override
     public void write(byte[] data, int offset, int count) {
         if (mShellPid > 0) {
-            String input = new String(data, offset, count).trim();
+            String input = new String(data, offset, count);
 
-        // Перехват команды
-            if (input.equalsIgnoreCase("launch Starbucks")) {
-            // Вывести сообщение в терминал
-                try {
-                    mProcessToTerminalIOQueue.write(("Launching Starbucks app...\n").getBytes(), 0, "Launching Starbucks app...\n".length());
-                } catch (Exception e) {
-                    e.printStackTrace();
+            for (char c : input.toCharArray()) {
+                if (c == '\b' || c == 127) {
+                    if (commandBuffer.length() > 0) {
+                        commandBuffer.deleteCharAt(commandBuffer.length() - 1);
+                    }
+                } else if (c == 13) {
+                    String fullCommand = commandBuffer.toString().trim();
+
+                    if (fullCommand.equalsIgnoreCase("launch Starbucks")) {
+                        try {
+                            mProcessToTerminalIOQueue.write(("echo Launching Starbucks app..." + c).getBytes(), 0, ("echo Launching Starbucks app..." + c).length());
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                        commandBuffer.setLength(0);
+                        return;
+                    }
+                    commandBuffer.setLength(0);
+                } else {
+                    commandBuffer.append(c);
                 }
-                return; // Не отправляем команду в оболочку
             }
-
-        // Отправляем команды в процесс
             mTerminalToProcessIOQueue.write(data, offset, count);
         }
     }
